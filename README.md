@@ -9,14 +9,22 @@ produce best-in-class slide decks. Use it through a flexible **Streamlit studio*
 
 ```
 Brief ──▶ Researcher ─▶ Planner ─▶ Writer (per slide) ─▶ Critic ⇄ Reviser ─▶ Builder ─▶ .pptx
-                │                                            │
-                └────────── Designer (auto theme pick) ──────┘
+                │                                            │                   ▲
+                └────────── Designer (theme / bespoke) ───────┘                  │
+                                                                                 │
+        You ──▶ 💬 Editor agent ──▶ edit · add · delete · move · re-layout ───────┘
+                     ▲                restyle · redesign · regenerate
+                     └── 🧠 Memory: conversation + standing preferences + version history
 ```
 
 ## ✨ Features
 
 | | |
 |---|---|
+| 💬 **Chat with your deck** | Refine by conversation: *"slide 3 is too wordy — cut to 4 bullets"*, *"add a competitor comparison after slide 5"*, *"make it dark and modern"*. The Editor agent routes your message into structured operations (edit / add / delete / move / re-layout / restyle / redesign) and runs them. Questions never mutate the deck. |
+| 🧠 **Persistent memory** | Remembers the conversation, learns **standing preferences** ("bullets max 8 words", "never say 'leverage'") and feeds them into every agent prompt. Snapshots every change so any edit is one click from undo. Survives restarts. |
+| 🎨 **Visible Designer + Design Studio** | Watch the Designer agent work and read *why* it chose a look. Then change the design any time — swap themes, hand-tune every colour and font, or describe what you want (*"a Magic Circle law firm — navy, gold, serif"*) and it designs a bespoke system. Re-skinning costs **zero** LLM calls. |
+| 👀 **Live slide preview** | Pixel-faithful HTML rendering of every slide right in the browser (1 pt of PowerPoint = 1 px), so you see the design before downloading. |
 | 🤖 **Agentic pipeline** | Six cooperating agents with a self-reflection loop: the Critic scores the deck and files slide-level issues, the Reviser rewrites only what's flagged (0–2 rounds, configurable). |
 | 🔑 **Bring your own key** | Paste your OpenAI key in the sidebar — held in session memory only, never stored. Also reads `OPENAI_API_KEY` / `.env`. |
 | 🌐 **Any OpenAI-compatible endpoint** | Optional base URL: Groq, OpenRouter, Azure gateways, local vLLM/Ollama — plus a custom model id field. |
@@ -43,7 +51,10 @@ Then in the app:
 2. **① Brief** — describe the deck (or click an example), then **⚡ Auto-pilot** for end-to-end,
    or **🧭 Draft outline** if you want to curate first.
 3. **② Outline** — edit titles, types and hints in the grid.
-4. **③ Generate & Download** — watch the agents work, preview every slide, download the `.pptx`.
+4. **③ Deck** — watch the agents work, see every slide rendered live, download the `.pptx`.
+5. **④ Design Studio** — change the look any time: theme gallery, colour/font tuning,
+   your own template, or describe a design and let the Designer build it. Restore any earlier version.
+6. **⑤ Chat** — tell the Editor agent what to change and watch the affected slides update.
 
 ### Notebook
 
@@ -67,13 +78,16 @@ open("pitch.pptx", "wb").write(pptx_bytes)
 ## 🏗️ Repository layout
 
 ```
-├── app.py                          # Streamlit studio (3-step flow, live agent progress)
+├── app.py                          # Streamlit studio (5 tabs, live agent progress)
 ├── slide_agent/
-│   ├── agent.py                    # Agent team + orchestration (plan/research/write/critique/revise)
+│   ├── agent.py                    # Agent team + orchestration (plan/research/write/critique/revise/design)
+│   ├── conversation.py             # 💬 Editor agent: message → structured ops → deck edits
+│   ├── memory.py                   # 🧠 conversation, standing preferences, version snapshots
+│   ├── preview.py                  # 👀 pixel-faithful HTML slide rendering (1 pt = 1 px)
 │   ├── llm.py                      # Resilient OpenAI client (BYO key, JSON mode w/ fallbacks)
 │   ├── models.py                   # Pydantic schemas: outline, slide content, critique
 │   ├── builder.py                  # python-pptx renderer (theme mode + template mode)
-│   ├── themes.py                   # Built-in design systems + theme-from-template
+│   ├── themes.py                   # Built-in design systems + theme-from-template / from-spec
 │   └── template_analyzer.py        # .potx→.pptx conversion, OOXML theme extraction, layout scoring
 ├── notebooks/slide_agent_playground.ipynb
 ├── templates/                      # drop your corporate templates here
@@ -81,6 +95,20 @@ open("pitch.pptx", "wb").write(pptx_bytes)
 ├── requirements.txt
 └── .env.example
 ```
+
+### Talking to the Editor agent
+
+| You say | What happens |
+|---|---|
+| "slide 3 is too wordy — 4 bullets max" | `edit_slide` → Reviser rewrites slide 3 only |
+| "add a competitor comparison after slide 5" | `add_slide` → Writer drafts it, indices shift |
+| "turn the roadmap into a process flow" | `set_type` → same message, new layout |
+| "make the whole deck punchier, add numbers" | `restyle_all` → every slide revised |
+| "make it dark and modern" | `custom_design` → Designer invents a palette |
+| "what's on slide 4?" | answered — **nothing is changed** |
+
+References like *"that slide"* or *"the KPI one"* resolve against the conversation history and a
+live map of the deck; slides can be targeted by number **or** by title (fuzzy-matched).
 
 ## ☁️ Deploy on Streamlit Community Cloud
 

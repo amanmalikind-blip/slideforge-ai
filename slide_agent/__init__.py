@@ -15,7 +15,9 @@ from typing import Optional, Tuple
 
 from .agent import AgentConfig, AgentResult, SlideAgent
 from .builder import build_deck
+from .conversation import ChatOutcome, DeckChatAgent
 from .llm import LLMClient
+from .memory import ConversationMemory
 from .models import (
     DeckContent,
     DeckOutline,
@@ -23,14 +25,27 @@ from .models import (
     SlideContent,
     SlideOutline,
 )
-from .themes import DEFAULT_THEME_KEY, THEMES, Theme, get_theme
+from .preview import deck_html, slide_html, slides_html, theme_gallery_html
+from .themes import (
+    DEFAULT_THEME_KEY,
+    SAFE_FONTS,
+    THEMES,
+    Theme,
+    get_theme,
+    theme_from_dict,
+    theme_from_spec,
+    theme_to_dict,
+)
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = [
     "AgentConfig", "AgentResult", "SlideAgent", "LLMClient",
+    "DeckChatAgent", "ChatOutcome", "ConversationMemory",
     "DeckContent", "DeckOutline", "SlideContent", "SlideOutline", "SLIDE_TYPES",
-    "THEMES", "Theme", "get_theme", "DEFAULT_THEME_KEY",
+    "THEMES", "Theme", "get_theme", "DEFAULT_THEME_KEY", "SAFE_FONTS",
+    "theme_from_dict", "theme_to_dict", "theme_from_spec",
+    "deck_html", "slide_html", "slides_html", "theme_gallery_html",
     "build_deck", "create_presentation", "__version__",
 ]
 

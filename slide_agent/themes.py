@@ -5,8 +5,8 @@ Fonts are limited to faces that ship with Windows/Office so decks open pixel-fai
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from typing import Dict, Optional
+from dataclasses import asdict, dataclass, replace
+from typing import Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -105,6 +105,53 @@ def theme_from_extracted(
         heading_font=fonts.get("major") or "Segoe UI",
         body_font=fonts.get("minor") or "Segoe UI",
         is_dark=is_dark,
+    )
+
+
+_HEX_RE = __import__("re").compile(r"^#?[0-9A-Fa-f]{6}$")
+
+# Faces that ship with Windows/Office, so decks open pixel-faithful anywhere.
+SAFE_FONTS = [
+    "Segoe UI", "Segoe UI Semibold", "Calibri", "Calibri Light", "Arial", "Georgia",
+    "Times New Roman", "Tahoma", "Verdana", "Trebuchet MS", "Garamond", "Century Gothic",
+    "Franklin Gothic Book", "Cambria", "Consolas",
+]
+
+_COLOR_FIELDS = ("bg", "surface", "text", "muted", "primary", "secondary", "accent")
+
+
+def clean_hex(value: str, fallback: str) -> str:
+    v = str(value or "").strip()
+    return v.lstrip("#").upper() if _HEX_RE.match(v) else fallback
+
+
+def theme_to_dict(theme: Theme) -> Dict[str, object]:
+    return asdict(theme)
+
+
+def theme_from_dict(data: Optional[Dict[str, object]]) -> Theme:
+    if not data:
+        return THEMES[DEFAULT_THEME_KEY]
+    base = THEMES.get(str(data.get("key", "")), THEMES[DEFAULT_THEME_KEY])
+    fields = {k: data.get(k, getattr(base, k)) for k in Theme.__dataclass_fields__}
+    return Theme(**fields)  # type: ignore[arg-type]
+
+
+def theme_from_spec(spec: Dict[str, object], base: Optional[Theme] = None,
+                    name: str = "AI-designed") -> Theme:
+    """Build a Theme from a (possibly partial, possibly messy) LLM design spec."""
+    base = base or THEMES[DEFAULT_THEME_KEY]
+    colors = {f: clean_hex(str(spec.get(f, "")), getattr(base, f)) for f in _COLOR_FIELDS}
+    heading = str(spec.get("heading_font", "") or base.heading_font).strip()
+    body = str(spec.get("body_font", "") or base.body_font).strip()
+    return Theme(
+        key="custom",
+        name=str(spec.get("name", "") or name)[:40],
+        tagline=str(spec.get("tagline", "") or "Custom design")[:90],
+        heading_font=heading or "Segoe UI",
+        body_font=body or "Segoe UI",
+        is_dark=_luminance(colors["bg"]) < 0.35,
+        **colors,
     )
 
 

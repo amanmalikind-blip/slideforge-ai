@@ -34,7 +34,7 @@ from .models import (
     SlideContent,
     SlideOutline,
 )
-from .themes import THEMES
+from .themes import DEFAULT_THEME_KEY, SAFE_FONTS, THEMES, Theme, theme_from_spec
 
 EventCallback = Callable[[str, str, float], None]
 
@@ -65,9 +65,11 @@ class AgentResult:
 
 
 class SlideAgent:
-    def __init__(self, llm: LLMClient, config: Optional[AgentConfig] = None):
+    def __init__(self, llm: LLMClient, config: Optional[AgentConfig] = None, memory=None):
         self.llm = llm
         self.config = config or AgentConfig()
+        self.memory = memory            # optional ConversationMemory — supplies standing preferences
+        self.design_rationale: str = ""  # why the Designer chose what it chose (shown in the UI)
 
     # ------------------------------------------------------------------ shared prompt bits
     def _lang_rule(self) -> str:
@@ -79,8 +81,9 @@ class SlideAgent:
     def _style_rules(self) -> str:
         c = self.config
         extra = f"\nAdditional instructions from the user: {c.extra_instructions}" if c.extra_instructions else ""
+        prefs = self.memory.prefs_block() if self.memory is not None else ""
         return (
-            f"Audience: {c.audience}. Tone: {c.tone}. {self._lang_rule()}{extra}"
+            f"Audience: {c.audience}. Tone: {c.tone}. {self._lang_rule()}{extra}{prefs}"
         )
 
     # ------------------------------------------------------------------ researcher
@@ -163,11 +166,45 @@ class SlideAgent:
             data = self.llm.complete_json(system, user, temperature=0.2)
             key = str(data.get("theme", "")).lower().strip()
             if key in THEMES:
-                on_event("design", f"Designer picked “{THEMES[key].name}” — {data.get('why', '')}", 0.24)
+                self.design_rationale = str(data.get("why", "")).strip()
+                on_event("design", f"Designer picked “{THEMES[key].name}” — {self.design_rationale}", 0.24)
                 return key
         except Exception:
             pass
         return "aurora"
+
+    def design_from_prompt(self, instruction: str, base: Optional[Theme] = None,
+                           on_event: EventCallback = _noop) -> Theme:
+        """Designer agent: invent a bespoke colour + type system from a description.
+
+        e.g. "make it look like a Magic Circle law firm — navy, serif, restrained".
+        """
+        on_event("design", f"🎨 Designer agent: designing “{instruction[:60]}”…", 0.3)
+        base = base or THEMES[DEFAULT_THEME_KEY]
+        system = (
+            "You are the Design Agent of SlideForge, an expert presentation art director. "
+            "Invent a coherent slide design system from the user's description. "
+            "Rules: 6-digit hex colours, no '#'. Ensure strong contrast — body text must be "
+            "readable on 'bg', and 'primary' is used as a full-bleed title background with white "
+            "text unless the design is dark. 'surface' is a subtle tint of 'bg' used for cards. "
+            "'accent' must pop against both bg and surface. "
+            f"Fonts must be chosen from this list only: {', '.join(SAFE_FONTS)}. "
+            'Return ONLY JSON: {"name": str, "tagline": str, "bg": hex, "surface": hex, '
+            '"text": hex, "muted": hex, "primary": hex, "secondary": hex, "accent": hex, '
+            '"heading_font": str, "body_font": str, "why": str}'
+        )
+        user = (
+            f"Design request: {instruction}\n\n"
+            f"Current design for reference (change what the request implies, keep what it doesn't): "
+            f"bg={base.bg}, surface={base.surface}, text={base.text}, muted={base.muted}, "
+            f"primary={base.primary}, secondary={base.secondary}, accent={base.accent}, "
+            f"heading={base.heading_font}, body={base.body_font}"
+        )
+        data = self.llm.complete_json(system, user, temperature=0.6)
+        self.design_rationale = str(data.get("why", "")).strip()
+        theme = theme_from_spec(data, base=base, name="AI-designed")
+        on_event("design", f"🎨 Designer produced “{theme.name}” — {self.design_rationale}", 0.36)
+        return theme
 
     # ------------------------------------------------------------------ writer
     _WRITER_FIELD_GUIDE = """

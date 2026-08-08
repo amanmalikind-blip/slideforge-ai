@@ -22,3 +22,6 @@ output/
 Thumbs.db
 .vscode/
 .idea/
+
+# SlideForge session memory (local only)
+.slideforge_memory.json
