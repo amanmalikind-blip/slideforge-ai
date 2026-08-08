@@ -41,6 +41,23 @@ from slide_agent.template_analyzer import describe_template, open_template
 
 MEMORY_FILE = Path(__file__).parent / ".slideforge_memory.json"
 
+# Streamlit Community Cloud runs ONE process for ALL visitors and mounts the repo at
+# /mount/src. Session state is per-visitor, but the filesystem is not — so disk-backed
+# memory must stay off there, otherwise one user's preferences, chat history and deck
+# content would be visible to the next. Local runs are single-user, so it defaults on.
+IS_CLOUD = Path("/mount/src").exists() or bool(os.environ.get("STREAMLIT_SHARING_MODE"))
+
+
+def default_api_key() -> str:
+    """Env var first, then st.secrets — so a self-hosted deploy can pre-fill a key."""
+    key = os.environ.get("OPENAI_API_KEY", "")
+    if not key:
+        try:
+            key = st.secrets.get("OPENAI_API_KEY", "")  # absent secrets.toml raises
+        except Exception:
+            key = ""
+    return key
+
 st.set_page_config(
     page_title="SlideForge AI — Agentic Deck Studio",
     page_icon="🎬",
@@ -86,7 +103,9 @@ EXAMPLES = {
 # ----------------------------------------------------------------------------- state
 def init_state():
     if "memory" not in st.session_state:
-        st.session_state.memory = ConversationMemory.load(MEMORY_FILE)
+        st.session_state.memory = (
+            ConversationMemory() if IS_CLOUD else ConversationMemory.load(MEMORY_FILE)
+        )
     defaults = {
         "outline_df": None,
         "deck_title": "",
@@ -103,7 +122,7 @@ def init_state():
         "use_template": False,
         "design_rationale": "",
         "chat_changed": [],
-        "persist_memory": True,
+        "persist_memory": not IS_CLOUD,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -122,7 +141,7 @@ def set_theme(theme: Theme):
 
 
 def save_memory():
-    if st.session_state.persist_memory:
+    if st.session_state.persist_memory and not IS_CLOUD:
         try:
             MEM.brief = st.session_state.brief
             MEM.save(MEMORY_FILE)
@@ -162,7 +181,7 @@ with st.sidebar:
 
     st.markdown("#### 🔑 Your OpenAI key")
     api_key = st.text_input(
-        "API key", value=os.environ.get("OPENAI_API_KEY", ""),
+        "API key", value=default_api_key(),
         type="password", placeholder="sk-…",
         help="Bring your own key. Used only for this session — never stored or logged.",
     )
@@ -198,10 +217,14 @@ with st.sidebar:
 
     st.divider()
     st.markdown("#### 💾 Memory")
-    st.session_state.persist_memory = st.toggle(
-        "Remember across restarts", value=st.session_state.persist_memory,
-        help=f"Saves preferences, chat history and versions to {MEMORY_FILE.name} (gitignored).",
-    )
+    if IS_CLOUD:
+        st.caption("☁️ Hosted app — memory lives in your browser session only "
+                   "(it is never written to the shared server disk).")
+    else:
+        st.session_state.persist_memory = st.toggle(
+            "Remember across restarts", value=st.session_state.persist_memory,
+            help=f"Saves preferences, chat history and versions to {MEMORY_FILE.name} (gitignored).",
+        )
     st.caption(f"{len(MEM.preferences)} preference(s) · {len(MEM.turns)} chat turn(s) · "
                f"{len(MEM.versions)} version(s)")
     if MEM.preferences:
@@ -216,7 +239,10 @@ with st.sidebar:
         if MEM.remember([new_pref]):
             save_memory(); st.toast("Remembered ✓", icon="🧠"); st.rerun()
     if st.button("🗑️ Clear all memory", use_container_width=True):
-        MEM.clear(); MEMORY_FILE.unlink(missing_ok=True); st.rerun()
+        MEM.clear()
+        if not IS_CLOUD:
+            MEMORY_FILE.unlink(missing_ok=True)
+        st.rerun()
 
 model = (custom_model or model_pick).strip() if model_pick == "Custom…" else model_pick
 key_ready = bool((api_key or "").strip())

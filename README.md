@@ -112,10 +112,29 @@ live map of the deck; slides can be targeted by number **or** by title (fuzzy-ma
 
 ## ☁️ Deploy on Streamlit Community Cloud
 
-1. Push this repo to GitHub.
-2. In [share.streamlit.io](https://share.streamlit.io), point a new app at `app.py`.
-3. No server-side key needed — every user brings their own key in the sidebar.
-   (Optionally set `OPENAI_API_KEY` in app *Secrets* to pre-fill it for yourself.)
+The repo is deploy-ready — no code changes needed.
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+2. **Create app** → **Deploy a public app from GitHub**.
+3. Repository `amanmalikind-blip/slideforge-ai`, branch `main`, main file **`app.py`**.
+4. **Deploy**. First build takes 2–4 minutes while dependencies install.
+
+**No server-side API key is required** — every visitor brings their own in the sidebar.
+
+> ⚠️ **Don't put your own `OPENAI_API_KEY` in Secrets on a *public* app.** The app pre-fills
+> the key field from secrets, so every visitor would be spending *your* credit. Secrets are
+> only appropriate for a private app or a self-hosted deploy.
+
+### What changes when hosted
+
+Community Cloud runs **one process for all visitors**. Session state is per-visitor, but the
+filesystem is shared — so the app detects the hosted environment (`/mount/src`) and keeps
+memory **in-session only**, never writing preferences, chat history or deck content to the
+shared disk. Locally it is single-user, so disk persistence stays on and survives restarts.
+
+Also worth knowing on the free tier: **1 GB RAM** per app (template uploads are capped at
+25 MB in `.streamlit/config.toml` to stay well inside it), and apps **sleep after inactivity** —
+the first visit after a nap takes a few seconds to wake, and wakes with empty memory.
 
 ## 🔒 Security notes
 

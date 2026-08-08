@@ -6,7 +6,8 @@ textColor = "#1A1B2E"
 font = "sans serif"
 
 [server]
-maxUploadSize = 100
+# Templates are small; a low cap keeps well inside Community Cloud's 1 GB per-app memory.
+maxUploadSize = 25
 headless = true
 
 [browser]
